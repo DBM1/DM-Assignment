@@ -7,7 +7,7 @@ TEXT = 'TEXT'
 
 
 def load_data(nrows=None) -> pd.DataFrame:
-    data_file = 'tweet/training.1600000.processed.noemoticon.csv'
+    data_file = 'data/tweet/training.1600000.processed.noemoticon.csv'
     columns_index = [0, 5]
     columns_name = [CATEGORY, TEXT]
     file_data = pd.read_csv(data_file, engine='python', header=None, usecols=columns_index, names=columns_name,
