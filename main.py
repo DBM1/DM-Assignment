@@ -1,10 +1,9 @@
 import numpy as np
 import pandas as pd
-import io
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import StandardScaler
-# import torch
+import torch
 import time
 from transformers import AutoTokenizer, AutoModel
 
@@ -36,72 +35,28 @@ def token_to_cuda(tokenizer_output):
     return output
 
 
-def generate_fasttext_embedding(data):
-    vectors = load_vectors('wiki-news-300d-1M.vec')
-    result = []
-    for index, row in data.iterrows():
-        text = row[TEXT]
-        embeddings = []
-        for word in text.split():
-            if word in vectors.keys():
-                embeddings.append(vectors[word])
-        embeddings = np.array(embeddings)
-        if embeddings.shape[0] != 0:
-            result.append(embeddings.mean(0))
-    with open('fasttext_embedding/result.txt', 'w') as f:
-        for line in result:
-            line_format = [round(i, 4) for i in line]
-            f.write(str(line_format) + '\n')
-
-
-def generate_glove_embedding(data):
-    vectors = load_glove_dict('glove.42B.300d/glove.42B.300d.txt')
-    result = []
-    for index, row in data.iterrows():
-        text = row[TEXT]
-        embeddings = []
-        for word in text.split():
-            if word in vectors.keys():
-                embeddings.append(vectors[word])
-        embeddings = np.array(embeddings)
-        if embeddings.shape[0] != 0:
-            result.append(embeddings.mean(0))
-    with open('glove_embedding/result.txt', 'w') as f:
-        for line in result:
-            line_format = [round(i, 4) for i in line]
-            f.write(str(line_format) + '\n')
-    print(len(result))
-
-
 def generate_bert_embedding(data, batchsize=10, log_interval=500):
     start = time.time()
-    data = data[TEXT]
     data_size = data.shape[0]
     tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
     model = AutoModel.from_pretrained('bert-base-uncased').cuda()
     result = []
     for i in range((data.shape[0] // batchsize) + 1):
         data_batch = data[(i * batchsize):((i + 1) * batchsize)]
-        if data_batch.shape[0] == 0:
-            break
         inputs = token_to_cuda(tokenizer(data_batch.tolist(), padding=True, truncation=True, return_tensors='pt'))
         batch_result = model(**inputs).pooler_output.detach().tolist()
         result += batch_result
         if (i + 1) % log_interval == 0:
             with open('bert_embedding\\' + str((i + 1) // log_interval) + '.txt', 'w') as f:
                 for line in result:
-                    line_format = [round(i, 4) for i in line]
-                    f.write(str(line_format) + '\n')
+                    line_format = [round(i, 5) for i in line]
+                    f.write(str(line_format))
             print('TIME {}  num timesteps {} processed {:.2f}%'
                   .format(time.strftime('%Hh %Mm %Ss', time.gmtime(time.time() - start)),
                           i + 1,
-                          ((i + 1) * batchsize * 100) / data_size))
+                          ((i + 1) * 100) / data_size))
             result = []
-    if len(result) != 0:
-        with open('bert_embedding\\final.txt', 'w') as f:
-            for line in result:
-                line_format = [round(i, 5) for i in line]
-                f.write(str(line_format) + '\n')
+    return result
 
 
 def get_distribution(data):
@@ -192,22 +147,5 @@ def get_statistics(data):
         print('Distribution: ' + str(distribution))
 
 
-def load_vectors(fname):
-    fin = io.open(fname, 'r', encoding='utf-8', newline='\n', errors='ignore')
-    n, d = map(int, fin.readline().split())
-    data = {}
-    for line in fin:
-        tokens = line.rstrip().split(' ')
-        data[tokens[0]] = list(map(float, tokens[1:]))
-    return data
-
-
-def load_glove_dict(fname):
-    with open(fname, encoding='utf8') as f:
-        lines = f.readlines()
-        data = {}
-        for line in lines:
-            tokens = line.rstrip().split(' ')
-            data[tokens[0]] = list(map(float, tokens[1:]))
-    print('loaded {}'.format(fname))
-    return data
+data = load_data_news_train()
+generate_bert_embedding(data[TEXT])
